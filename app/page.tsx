@@ -1,103 +1,155 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import React, { useState, useEffect, useMemo } from 'react';
+
+// Definindo os tipos de dados que esperamos da nossa API
+interface Atividade {
+  id: number;
+  nome: string;
+  diaLimite: number;
+  categoria: string;
+}
+
+interface Controle {
+  id: number;
+  status: string;
+  atividade: Atividade;
+}
+
+interface EmpresaDashboard {
+  id: number;
+  nome: string;
+  controles: Controle[];
+}
+
+export default function DashboardPage() {
+  const [data, setData] = useState<EmpresaDashboard[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Estado para controlar o mês e ano exibidos
+  const [dataSelecionada, setDataSelecionada] = useState(new Date());
+
+  // Função para buscar os dados do dashboard
+  const fetchDashboardData = async (mes: number, ano: number) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/dashboard?mes=${mes}&ano=${ano}`);
+      if (!response.ok) {
+        throw new Error('Falha ao carregar dados do dashboard.');
+      }
+      const dashboardData = await response.json();
+      setData(dashboardData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro desconhecido');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Busca os dados quando a página carrega ou quando a data muda
+  useEffect(() => {
+    const mes = dataSelecionada.getMonth() + 1;
+    const ano = dataSelecionada.getFullYear();
+    fetchDashboardData(mes, ano);
+  }, [dataSelecionada]);
+
+  // Função para "dar o check" em uma atividade
+  const handleMarcarComoConcluido = async (controleId: number) => {
+    // Otimistamente, atualiza a UI antes mesmo da resposta da API
+    setData(currentData => 
+      currentData.map(empresa => ({
+        ...empresa,
+        controles: empresa.controles.map(controle => 
+          controle.id === controleId ? { ...controle, status: 'Concluído' } : controle
+        ),
+      }))
+    );
+
+    try {
+      await fetch(`/api/controle/${controleId}`, { method: 'PATCH' });
+      // Se quiséssemos, poderíamos re-buscar os dados aqui, mas a UI já foi atualizada.
+    } catch (error) {
+      // Se der erro, desfaz a mudança na UI e mostra o erro
+      alert('Não foi possível salvar a alteração.');
+      const mes = dataSelecionada.getMonth() + 1;
+      const ano = dataSelecionada.getFullYear();
+      fetchDashboardData(mes, ano);
+    }
+  };
+  
+  // Funções para mudar o mês
+  const mesAnterior = () => {
+    setDataSelecionada(new Date(dataSelecionada.setMonth(dataSelecionada.getMonth() - 1)));
+  };
+  
+  const proximoMes = () => {
+    setDataSelecionada(new Date(dataSelecionada.setMonth(dataSelecionada.getMonth() + 1)));
+  };
+
+  // Agrupa os controles por categoria para cada empresa
+  const empresasComControlesAgrupados = useMemo(() => {
+    return data.map(empresa => ({
+      ...empresa,
+      controlesAgrupados: empresa.controles.reduce((acc, controle) => {
+        const categoria = controle.atividade.categoria;
+        if (!acc[categoria]) {
+          acc[categoria] = [];
+        }
+        acc[categoria].push(controle);
+        return acc;
+      }, {} as Record<string, Controle[]>),
+    }));
+  }, [data]);
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+      {/* Seletor de Mês */}
+      <div className="flex items-center justify-center mb-6 bg-gray-800 p-4 rounded-lg shadow-md">
+        <button onClick={mesAnterior} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-l-lg">
+          &lt; Anterior
+        </button>
+        <h1 className="text-2xl font-bold text-white text-center w-64">
+          {dataSelecionada.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+        </h1>
+        <button onClick={proximoMes} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-r-lg">
+          Próximo &gt;
+        </button>
+      </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      {isLoading && <p className="text-center text-gray-400">Carregando...</p>}
+      {error && <p className="text-center text-red-500">{error}</p>}
+
+      {/* Grid de Empresas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {empresasComControlesAgrupados.map(empresa => (
+          <div key={empresa.id} className="bg-gray-800 rounded-lg shadow-lg p-5">
+            <h2 className="text-xl font-bold text-white border-b border-gray-700 pb-2 mb-4">{empresa.nome}</h2>
+            {Object.entries(empresa.controlesAgrupados).map(([categoria, controles]) => (
+              <div key={categoria} className="mb-4">
+                <h3 className="text-lg font-semibold text-blue-400 mb-2">{categoria}</h3>
+                <ul className="space-y-2">
+                  {controles.map(controle => (
+                    <li key={controle.id} className="flex items-center justify-between bg-gray-700 p-2 rounded-md">
+                      <span className={`flex-1 ${controle.status === 'Concluído' ? 'line-through text-gray-500' : 'text-white'}`}>
+                        {controle.atividade.nome} (v. {controle.atividade.diaLimite})
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={controle.status === 'Concluído'}
+                        onChange={() => handleMarcarComoConcluido(controle.id)}
+                        disabled={controle.status === 'Concluído'}
+                        className="h-5 w-5 rounded bg-gray-600 border-gray-500 text-green-500 focus:ring-green-500 disabled:opacity-50"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,0 +1,43 @@
+generator client {
+   provider = "prisma-client-js"
+ }
+
+ datasource db {
+   provider = "postgresql"
+   url      = env("DATABASE_URL")
+ }
+
+ // A definição das categorias
+ enum Categoria {
+   TRABALHISTA
+   TRIBUTARIA
+ }
+
+ model Empresa {
+   id              Int      @id @default(autoincrement())
+   nome            String
+   cnpj            String   @unique
+   controles       ControleMensal[]
+ }
+
+ model Atividade {
+   id              Int      @id @default(autoincrement())
+   nome            String
+   diaLimite       Int
+   categoria       Categoria // <-- O campo obrigatório que estava faltando
+   controles       ControleMensal[]
+ }
+
+ model ControleMensal {
+   id              Int       @id @default(autoincrement())
+   mes             Int
+   ano             Int
+   status          String    @default("Pendente")
+   empresa         Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+   empresaId       Int
+   atividade       Atividade @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+   atividadeId     Int
+   dataConclusao   DateTime?
+
+   @@unique([empresaId, atividadeId, mes, ano])
+ }
